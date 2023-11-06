@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>shinylive POC</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="report_files/libs/clipboard/clipboard.min.js"></script>
+<script src="report_files/libs/quarto-html/quarto.js"></script>
+<script src="report_files/libs/quarto-html/popper.min.js"></script>
+<script src="report_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="report_files/libs/quarto-html/anchor.min.js"></script>
+<link href="report_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="report_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="report_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="report_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="report_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<meta name="shinylive:serviceworker_dir" content=".">
+<script src="report_files/libs/quarto-contrib/shinylive-0.2.1/shinylive/load-shinylive-sw.js" type="module"></script>
+<script src="report_files/libs/quarto-contrib/shinylive-0.2.1/shinylive/run-python-blocks.js" type="module"></script>
+<link href="report_files/libs/quarto-contrib/shinylive-0.2.1/shinylive/shinylive.css" rel="stylesheet">
+<link href="report_files/libs/quarto-contrib/shinylive-quarto-css/shinylive-quarto.css" rel="stylesheet">
+
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview"><span class="header-section-number">1</span> Overview</a></li>
+  <li><a href="#adsl-analysis" id="toc-adsl-analysis" class="nav-link" data-scroll-target="#adsl-analysis"><span class="header-section-number">2</span> ADSL Analysis</a></li>
+  <li><a href="#survival-analysis" id="toc-survival-analysis" class="nav-link" data-scroll-target="#survival-analysis"><span class="header-section-number">3</span> Survival Analysis</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">shinylive POC</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="overview" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="overview"><span class="header-section-number">1</span> Overview</h2>
+<p>Shinylive is a serverless version of Shiny, which enables running Shiny applications in a web browser without needing a backend server. It was first introduced for Python during Posit Conf 2022 using WebAssembly and Pyodide, and its R version during the Posit Conf 2023 using WebR.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/shinylive.png" class="img-fluid figure-img" style="width:60.0%"></p>
+<figcaption class="figure-caption">shinylive archticture</figcaption>
+</figure>
+</div>
+<p>Currently, there are three methods (or formats) to use Shinylive applications:</p>
+<ul>
+<li>Render a Shiny app into HTML static file using the shinylive package</li>
+<li>Host a Shiny app in Fiddle - a built-in web application to run Shiny R and Python applications</li>
+<li>Embed Shiny app in Quarto documentation using the quarto-shinylive extension for Quarto</li>
+</ul>
+</section>
+<section id="adsl-analysis" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="adsl-analysis"><span class="header-section-number">2</span> ADSL Analysis</h2>
+<pre class="shinylive-r" data-engine="r"><code>#| standalone: true
+#| viewerHeight: 600
+
+library(gtsummary)
+library(shiny)
+library(gt)
+library(dplyr)
+library(purrr)
+library(DT)
+library(haven)
+library(ggplot2)
+
+# create the Shiny app
+
+#? ui side
+ui &lt;- navbarPage( "ADSL shinylive POC", id = 'navbar_id',
+               
+# homepage with description
+tabPanel("",
+icon = icon("home", lib = "glyphicon"),
+h2("shinylive: Run 'shiny' Applications in the Browser"),
+br(),
+h4("
+Exporting 'shiny' applications with 'shinylive' allows you to run them entirely in a web browser, without the need for a separate R server. The traditional way of deploying 'shiny' applications involves in a separate server and client: the server runs R and 'shiny', and clients connect via the web browser.
+"),
+br(),
+h4("When an application is deployed with 'shinylive', R and 'shiny' run in the web browser (via 'webR'): the browser is effectively both the client and server for the application. This allows for your 'shiny' application exported by 'shinylive' to be hosted by a static web server.")
+
+#br(),
+#tags$img(src = "./shinylive.png", width = "60%", style="display: block; margin-left: auto; margin-right: auto;")
+
+),     
+
+# import data
+#tabPanel("Data", 
+#  fluidRow(
+#    column(3, 
+#    uiOutput("import_data_ui1"),
+#    actionButton(inputId = 'reset_data',"Reset data", icon = icon("refresh", lib = "glyphicon"))       
+#    ),
+#    column(9, DT::dataTableOutput('out_table'))
+#    )
+# ),
+
+
+  tabPanel("Data", 
+   fluidRow(
+     column(3, 
+     tabsetPanel( id = "tab_data", 
+     br(),
+     tabPanel('Import',
+     fileInput("file1", "Choose File (csv/sas7bdat/xpt)", 
+           accept = c( ".csv", ".sas7bdat", ".xpt"))),
+
+     tabPanel("Default",
+     p('An ADSL-flavored clinical trial toy dataset from gt package.'),
+     p('This tibble contains artificial data for 182 subjects of the GT01 study. Each row corresponds to demographic characteristics of a single trial participant. Two out of 182 study participants were screen failures and thus not treated, the rest of the study population was randomized with a 1:1 ratio to receive either "Placebo" (as comparator) or "Drug 1". The dataset entails subject level demographics such as age, age group, sex, ethnicity, and body mass index (BMI) at baseline, as well as an event flag, indicating whether the subject experienced a specific event throughout the course of the study or not.'),
+     br(),
+     actionButton('get_local_data',"Load Default data") 
+     )                
+    )),
+     column(9, DT::dataTableOutput('out_table'))
+     )
+  ),
+
+
+# table section
+tabPanel("Table", 
+  fluidRow(
+    column(4,     
+    wellPanel(uiOutput("custom_ui1")),
+    wellPanel(uiOutput("custom_ui2")),
+    
+    wellPanel(
+    p(strong('Filters;')),  
+    fluidRow(
+    column(6, align = 'right', checkboxInput("ittfl", "ITTFL", FALSE)),
+    column(6, align = 'left', checkboxInput("saffl", "SAFFL", FALSE))
+    ), 
+    sliderInput(inputId = "age", "Age:", min = 1, max = 100, value = c(1,100), step=1, ticks=TRUE)
+    ),  
+    br(),
+    actionButton(inputId = 'reset_filter',"Reset filters", icon = icon("cog", lib = "glyphicon")) 
+    
+
+    )
+
+    ,column(8, 
+    fluidRow(
+    gt::gt_output("summaryds1")
+    )
+    )
+  ))
+
+  # boxplot section
+  ,
+  tabPanel("Plot", 
+  
+  fluidRow(
+  
+  column(3,     
+      wellPanel(uiOutput("ggbox_ui1")),
+      wellPanel(uiOutput("ggbox_ui2"))
+       #br(),
+       #downloadButton("download_ggbox", label = "Download Plot")  
+       )
+  
+   ,column(9,
+   plotOutput("boxplot")
+   ))
+  )
+
+
+# end
+)
+
+
+#? server side
+server &lt;- function(input, output, session) {
+
+  # function
+   is.Date &lt;- function(x) {
+      inherits(x, c("Date", "POSIXt"))
+    }
+
+  #?
+  observeEvent(input$reset_filter, {
+    req(input$file1)
+
+    updateCheckboxInput(session, "ittfl", label = NULL, value = FALSE)
+    updateCheckboxInput(session, "saffl", label = NULL, value = FALSE)
+    updateSliderInput(session, "age", min = 1, max = 100, value=c(1, 100), step=1)
+  })
+
+  #?
+  #rv &lt;- reactiveValues() 
+
+  #observeEvent(input$file1, {
+  #  rv$file1 &lt;- input$file1
+  # })
+
+
+  #? render import data ui
+  #observe({
+   
+  #if(req(input$navbar) == "Data"){
+   
+  # output$import_data_ui1 &lt;- renderUI({
+  #    fileInput("file1", "Choose File (csv/sas7bdat/xpt)", 
+  #                        accept = c( ".csv", ".sas7bdat", ".xpt"))  
+  # })
+  # }
+  # })
+
+ #? reset
+ # observeEvent(input$reset_data, {
+ #   rv$file1 &lt;- NULL
+  
+ #   output$import_data_ui1 &lt;- renderUI({
+ #   fileInput('file1', label = NULL)
+ #   })
+ #  })
+
+ #import ds
+  import_data &lt;- reactive({  
+
+    req(input$file1) 
+    #infile &lt;- rv$file1
+
+    infile &lt;- input$file1
+    # validation
+    ext &lt;- tools::file_ext(infile$datapath)
+    validate(need(ext %in% c("csv","xls","sas7bdat","xpt"), "Please upload the file!"))
+
+    if(ext == "csv"){
+     read.csv(infile$datapath)
+    } else if(ext == "xpt"){
+     read_xpt(infile$datapath)
+    } else if(ext == "sas7bdat"){
+     read_sas(infile$datapath)
+    }
+
+ })
+
+ #? local data
+    local_data &lt;- eventReactive(input$get_local_data, {
+     # haven::read_xpt('adsl.xpt')
+     gt::rx_adsl %&gt;%
+     filter(!is.na(TRTA))
+     })
+
+     
+
+   #? finalize the data  
+   react_data &lt;- reactive({  
+
+       if (input$tab_data == "Default"){
+       local_data()
+       } else{
+       import_data()
+       }
+
+   })
+
+
+   #?
+   output$out_table &lt;- DT::renderDataTable({
+
+     #req(input$file1)
+     react_data() %&gt;% DT::datatable(options = list(lengthMenu = c(5, 30, 50), pageLength = 5))
+     
+     })
+
+
+  #? custom ui part
+  
+  #
+  output$custom_ui1 &lt;- renderUI({
+   
+   req(react_data())
+ 
+   trt_cols &lt;- react_data() %&gt;% 
+               dplyr:: select(starts_with("TRT")) %&gt;%
+               purrr::discard(~is.numeric(.)) %&gt;%
+               purrr::discard(~is.Date(.)) %&gt;%
+               names()
+
+   selectInput("trtvariable", "Select Treatment Variable:",trt_cols, trt_cols[1])
+
+  })  
+
+  # y
+  output$custom_ui2 &lt;- renderUI({
+   req(react_data())
+
+   non_num_cols &lt;- react_data() %&gt;%
+    dplyr:: select(!starts_with("TRT")) %&gt;%
+    purrr::discard(~is.numeric(.)) %&gt;%
+    names()
+
+   selectizeInput( "variable2", "Select Variables:",non_num_cols,
+    options = list(placeholder = 'Choose'),
+    multiple = TRUE)
+  })  
+  
+  #? gt table
+  runsummaryds1 &lt;- reactive({
+    
+    req(react_data())
+    
+    newadsl&lt;- react_data()
+    
+    #? filter conditions
+    if(input$ittfl==TRUE &amp; ("ITTFL" %in% names(newadsl))) {newadsl &lt;- newadsl %&gt;% filter(ITTFL %in% c("Y"))}
+    if(input$saffl==TRUE &amp; ("SAFFL" %in% names(newadsl))) {newadsl &lt;- newadsl %&gt;% filter(SAFFL %in% c("Y"))}
+
+    #?
+    newadsl&lt;-newadsl%&gt;%filter(AGE&gt;=input$age[1] &amp; AGE&lt;=input$age[2])
+    
+    req(input$variable2)
+
+    validate(need(nrow(newadsl) != 0, "Data is empty")) 
+  
+    # table
+    newadsl %&gt;%
+    dplyr::select(input$trtvariable,!!!input$variable2)%&gt;%
+      tbl_summary(by=input$trtvariable,
+      missing_text="(Missing)",
+      type=all_continuous()~"continuous2",
+      statistic=all_continuous()~c("{N_nonmiss}", 
+      "{mean} ({sd})", "{median}", "{min}, {max}"))%&gt;%
+      add_overall(last=TRUE) %&gt;% 
+      as_gt()
+    
+  })
+  
+  # gt_summary
+  output$summaryds1 &lt;- gt::render_gt({   
+  runsummaryds1()    
+  })
+
+
+  #? boxlots 
+
+   output$ggbox_ui1 &lt;- renderUI({
+  
+   req(react_data())
+ 
+   trt_cols &lt;- react_data() %&gt;% 
+               dplyr:: select(starts_with("TRT")) %&gt;%
+               purrr::discard(~is.numeric(.)) %&gt;%
+               purrr::discard(~is.Date(.)) %&gt;%
+               names()
+
+   selectInput("boxp_trtvariable", "Select Treatment Variable:",trt_cols, trt_cols[1])
+
+  })  
+  
+
+   # selectinput
+  output$ggbox_ui2 &lt;- renderUI({
+  req(react_data())
+ 
+    subj_cols &lt;- react_data() %&gt;% 
+                    dplyr:: select(!starts_with("TRT")) %&gt;%
+                    purrr::discard(~ !is.numeric(.))%&gt;%
+                    purrr::discard(~is.Date(.)) %&gt;%
+                    names()
+   #
+    if('AGE' %in% subj_cols){
+    sel_subj &lt;- "AGE"
+    }else{
+    sel_subj &lt;- subj_cols[1]
+    }
+    
+    #
+    selectInput("subject_data", "Subject Data",subj_cols, sel_subj)
+
+  }) 
+
+   # reactive plot
+
+   gg_boxplot &lt;- reactive({
+
+    req(react_data())
+    req(input$subject_data)
+
+    ggplot(data = react_data(), 
+            aes(x = .data[[input$boxp_trtvariable]], 
+                y = .data[[input$subject_data]], 
+             fill = .data[[input$boxp_trtvariable]])) +
+      geom_boxplot() +
+      geom_jitter(width = 0.3, alpha = 0.4) +
+      theme_minimal() +
+      theme(legend.position = "none",
+            text = element_text(size = 15)) +
+      labs(
+        title = "ADSL Data",
+        subtitle = "Comparing Treatment Groups",
+        x = "",
+        #x = attributes(react_data[[input$boxp_trtvariable]]),
+        y = attributes(react_data()[[input$subject_data]])
+      )
+
+
+   })
+   
+   # plot
+    output$boxplot &lt;- renderPlot({
+    
+    gg_boxplot()
+
+  }, res = 100, height = 600)
+
+
+  #? download boxplot
+  output$download_ggbox &lt;- downloadHandler(
+      filename = function() { paste("ggbox_",format(Sys.time(), "%Y%m%d_%H%M%S"), '.svg', sep='') },
+      content = function(file) {
+        ggsave(file, plot = gg_boxplot(), device = "svg", width = 12, height = 8)
+      }
+    )
+
+
+# end  
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
+</code></pre>
+</section>
+<section id="survival-analysis" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="survival-analysis"><span class="header-section-number">3</span> Survival Analysis</h2>
+<p>Generally, survival analysis is a collection of statistical procedures for data analysis for which the outcome variable of interest is time until an event occurs.</p>
+<p>In the medical world, we typically think of survival analysis literally – tracking time until death. But, it’s more general than that – survival analysis models time until an event occurs (any event). This might be death of a biological organism. But it could also be the time until a hardware failure in a mechanical system, time until recovery, time someone remains unemployed after losing a job, time until a ripe tomato is eaten by a grazing deer, time until someone falls asleep in a workshop, etc. Survival analysis also goes by reliability theory in engineering, duration analysis in economics, and event history analysis in sociology.</p>
+<p>Type of events: death, disease, relapse, recovery…</p>
+<pre class="shinylive-r" data-engine="r"><code>#| standalone: true
+#| viewerHeight: 600
+
+library(shiny)
+library(dplyr)
+library(echarts4r)
+library(survival)
+library(survminer)
+library(DT)
+
+###?
+
+#' linebreak function to avoid repeat use of br()
+#'
+#' @param n 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+linebreaks &lt;- function(n){
+    HTML(strrep(br(), n))
+    }
+
+
+# ----
+#' get survfit summary data
+#'
+#' @param dat
+#' @param time_var
+#' @param event_var
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#' get_surv_summary(lung, time, status)
+get_surv_summary &lt;-   function(dat, time_var, event_var) {
+  # unquoting
+  time_var &lt;- enquo(time_var)
+  event_var &lt;- enquo(event_var)
+  
+  # data
+  dat    &lt;- dat %&gt;%
+    rename(time = (!!time_var),
+           event = (!!event_var)) %&gt;%
+    dplyr::select(time, event)
+  
+  eq_0 &lt;- glue::glue("survfit( ")
+  eq_left &lt;- glue::glue("Surv(time, event)")
+  eq_tilde &lt;- glue::glue("~")
+  eq_right &lt;- glue::glue(" 1 ")
+  eq_data &lt;- glue::glue(", dat)")
+  
+  comp_eq &lt;-
+    glue::glue(eq_0, eq_left, eq_tilde , eq_right, eq_data)
+  
+  
+  # survfit
+  #sfit &lt;- survfit(Surv(time, event) ~ 1, data = data )
+  
+  sfit &lt;- eval(rlang::parse_expr(comp_eq))
+  
+  # convert survfit modal to dataframe
+  res &lt;- surv_summary(sfit)
+  
+  # transform
+  res_df &lt;- res %&gt;%
+    as_tibble() |&gt;
+    mutate(surv = round(surv, 2))
+  
+  return(res_df)
+  
+}
+
+##?
+
+# sfit_df1 &lt;- get_surv_summary(lung, time, status)
+# sfit_df2 &lt;- get_surv_summary(veteran, time, status)
+
+
+# ----
+
+#' Interactive kaplan-meier
+#'
+#' @param sfit_df
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#' plot_km(sfit_df1)
+plot_km &lt;- function(dat) {
+  # echarts line plot
+  dat |&gt;
+    e_charts(time) |&gt;
+    e_line(surv)
+  
+}
+
+
+# ----
+
+#?
+#' get surv group summary data with a categorical variable
+#'
+#' @param dat
+#' @param time_var
+#' @param event_var
+#' @param grp_var
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#' sfit_grp_df1 &lt;- get_surv_grp_summary(lung, time, status, sex)
+get_surv_grp_summary &lt;-
+  function(dat, time_var, event_var, grp_var) {
+    # unquoting
+    time_var &lt;- enquo(time_var)
+    event_var &lt;- enquo(event_var)
+    #grp_var &lt;- enquo(grp_var)
+    if (grp_var == 1) {
+      grp_var &lt;- 1
+    } else{
+      grp_var &lt;- rlang::sym(grp_var)
+    }
+    
+    
+    # data
+    df    &lt;- dat %&gt;%
+      rename(time = (!!time_var),
+             event = (!!event_var)) %&gt;%
+      dplyr::select(time, event, (!!grp_var))
+    
+    
+    #
+    eq_0 &lt;- glue::glue("survfit( ")
+    eq_left &lt;- glue::glue("Surv(time, event)")
+    eq_tilde &lt;- glue::glue(" ~ ")
+    eq_right &lt;- glue::glue(grp_var)
+    #eq_right &lt;- paste(grp_var[2])
+    eq_data &lt;- glue::glue(", df)")
+    
+    comp_eq &lt;-
+      glue::glue(eq_0, eq_left, eq_tilde , eq_right, eq_data)
+    
+    
+    # survfit
+    sfit &lt;- eval(rlang::parse_expr(comp_eq))
+    
+    # convert survfit modal to dataframe
+    res &lt;- surv_summary(sfit)
+    
+    # transform
+    res_df &lt;- res %&gt;%
+      as_tibble() |&gt;
+      mutate(surv = round(surv, 2))
+    
+    return(res_df)
+    
+  }
+
+#
+# sfit_grp_df1 &lt;- get_surv_grp_summary(lung, time, status, sex)
+# sfit_grp_df2 &lt;- get_surv_grp_summary(veteran, time, status, trt)
+# sfit_grp_df3 &lt;- get_surv_grp_summary(veteran, time, status, 1)
+
+# ----
+
+
+#' Interactive kaplan-meier with a categorical variable
+#'
+#' @param dat
+#'
+#' @return
+#' @export
+#'
+#' @examples
+plot_km_group &lt;- function(dat) {
+  dat |&gt;
+    group_by(strata) |&gt;
+    e_charts(time) |&gt;
+    e_line(surv) |&gt;
+    e_tooltip(trigger = "axis")
+  
+  
+}
+
+# plot_km_group(sfit_grp_df1)
+
+
+#!
+
+#get_surv_censor &lt;- function(dat){
+
+#dat %&gt;%
+#        mutate(surv_censor = case_when((n.censor &gt; 0) ~ surv,
+#                                       (n.censor == 0) ~ NA_integer_,
+#                                       TRUE ~ NA_integer_))
+#}
+
+#sfit_cens_df1 &lt;- get_surv_censor(sfit_grp_df1)
+
+
+
+
+# ----
+
+#' Kaplan-Meier advanced plot
+#'
+#' @param dat
+#' @param tit
+#' @param sub_tit
+#'
+#' @return
+#' @export
+#'
+#' @examples
+plot_echart_km &lt;-
+  function(dat, tit = "Kaplan-Meier Plot", sub_tit = "data") {
+    # check "strata" in data
+    stopifnot("strata" %in% colnames(dat))
+    
+    
+    # plot
+    dat |&gt;
+      mutate(surv_censor = case_when((n.censor &gt; 0) ~ surv,
+                                     (n.censor == 0) ~ NA_integer_,
+                                     TRUE ~ NA_integer_
+      )) |&gt;
+      group_by(strata) %&gt;%
+      e_charts(time) |&gt;
+      e_line(
+        surv,
+        showSymbol = TRUE,
+        symbolSize = 3,
+        itemStyle = list(opacity = 0.6)
+      ) |&gt;
+      e_line(
+        surv_censor,
+        showSymbol = TRUE,
+        itemStyle = list(
+          borderWidth = 1,
+          borderColor = '#7B7C81',
+          color = '#91cc75',
+          shadowColor = '#91cc75'
+        ),
+        symbol = 'triangle',
+        symbolSize = 6,
+        tooltip = list(show = FALSE),
+        legend = list(show = FALSE)
+      ) |&gt;
+      e_tooltip(trigger = "axis") |&gt;
+      e_mark_line(
+        data = list(yAxis = 0.5),
+        y_index = 1,
+        symbol = "none",
+        lineStyle = list(type = 'dashed'),
+        itemStyle = list(color = "#e76f51"),
+        title = "50% threshold",
+        label = list(position = "insideEndTop")
+      ) |&gt;
+      e_title(text = tit, subtext = sub_tit) |&gt;
+      e_x_axis(
+        axisLabel = list(fontSize = 12,  color = '#333'),
+        name = "Time",
+        nameGap = 40,
+        nameLocation = 'middle',
+        nameTextStyle = list(
+          color = '#333',
+          fontSize = 16,
+          fontWeight = 500
+        )
+      ) |&gt;
+      e_y_axis(
+        axisLabel = list(fontSize = 12,  color = '#333'),
+        name = "Survival Probability",
+        nameGap = 40,
+        nameLocation = 'middle',
+        nameTextStyle = list(
+          color = '#333',
+          fontSize = 16,
+          fontWeight = 500
+        )
+      )
+  }
+
+
+
+# plot_echart_km(sfit_grp_df1, tit = "KM Plot", sub_tit = "lung")
+
+
+# ----
+
+#!
+
+#' Kaplan-Meier advanced plot with timeline
+#'
+#' @param dat
+#' @param tit
+#' @param sub_tit
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#' plot_echart_timeline_km(sfit_grp_df1, tit = "Kaplan-Meier Plot", sub_tit = "Lung Data", time_line = TRUE)
+
+plot_echart_timeline_km &lt;-
+  function(dat,
+           tit = "Kaplan-Meier Plot",
+           sub_tit = "data",
+           time_line = TRUE) {
+    # check "strata" in data
+    #stopifnot("strata" %in% colnames(dat))
+    
+    if ("strata" %in% colnames(dat)) {
+      dat1 &lt;- dat |&gt;
+        mutate(surv_censor = case_when((n.censor &gt; 0) ~ surv,
+                                       (n.censor == 0) ~ NA_integer_,
+                                       TRUE ~ NA_integer_
+        )) |&gt;
+        group_by(strata)
+    } else{
+      dat1 &lt;- dat |&gt;
+        mutate(surv_censor = case_when((n.censor &gt; 0) ~ surv,
+                                       (n.censor == 0) ~ NA_integer_,
+                                       TRUE ~ NA_integer_
+        ))
+    }
+    
+    
+    
+    # plot
+    ec1 &lt;- dat1 |&gt;
+      e_charts(time) |&gt;
+      e_line(
+        surv,
+        showSymbol = TRUE,
+        symbolSize = 3,
+        itemStyle = list(opacity = 0.6)
+      ) |&gt;
+      e_line(
+        surv_censor,
+        showSymbol = TRUE,
+        itemStyle = list(
+          borderWidth = 1,
+          borderColor = '#7B7C81',
+          color = '#91cc75',
+          shadowColor = '#91cc75'
+        ),
+        symbol = 'triangle',
+        symbolSize = 6,
+        tooltip = list(show = FALSE),
+        legend = list(show = FALSE)
+      ) |&gt;
+      e_tooltip(trigger = "axis") |&gt;
+      e_mark_line(
+        data = list(yAxis = 0.5),
+        y_index = 1,
+        symbol = "none",
+        lineStyle = list(type = 'dashed'),
+        itemStyle = list(color = "#e76f51"),
+        title = "50% threshold",
+        label = list(position = "insideEndTop")
+      ) |&gt;
+      e_title(text = tit, subtext = sub_tit) |&gt;
+      e_x_axis(
+        axisLabel = list(fontSize = 12,  color = '#333'),
+        name = "Time",
+        nameGap = 40,
+        nameLocation = 'middle',
+        nameTextStyle = list(
+          color = '#333',
+          fontSize = 16,
+          fontWeight = 500
+        )
+      ) |&gt;
+      e_y_axis(
+        axisLabel = list(fontSize = 12,  color = '#333'),
+        name = "Survival Probability",
+        nameGap = 40,
+        nameLocation = 'middle',
+        nameTextStyle = list(
+          color = '#333',
+          fontSize = 16,
+          fontWeight = 500
+        )
+      ) |&gt;
+      e_toolbox(
+        show = TRUE,
+        feature = list(
+          dataZoom = list (yAxisIndex = 'none'),
+          dataView = list (readOnly = TRUE),
+          restore = list(TRUE),
+          saveAsImage = list(TRUE)
+        )
+      )
+    
+    
+    # timeline
+    if (time_line) {
+      ec2 &lt;- ec1 |&gt;
+        e_datazoom(type = "slider")
+    } else{
+      ec2 &lt;- ec1
+    }
+    
+    
+    ec2
+  }
+
+
+#?
+
+ui &lt;- fluidPage(
+    
+    h2("Lung Data - Survival Analysis")
+    , linebreaks(1)
+    , fluidRow(
+      column(3, uiOutput(("time_ui")))
+      ,
+      column(3, uiOutput(("event_ui")))
+      ,
+      column(3, uiOutput(("grp_ui")))
+      ,
+      column(3,
+             tags$div(
+               style = "margin-top: 32px;",
+               actionButton("run_km", "Run")
+             )
+      )   
+    )
+
+    , linebreaks(1)
+
+    , fluidRow(
+       column(2),
+       column(8, echarts4rOutput("plot", width = '90%', height = '600px')),
+       column(2)
+     )
+
+    , linebreaks(1)
+
+    , fluidRow(
+      column(2)
+      ,column(8,DTOutput('summary_tbl', width = 900))
+      ,column(2)
+    )
+)
+
+#?
+server &lt;- function(input, output, session) {
+
+#? lung data
+ select_df &lt;- reactive({
+   lung
+ })
+
+
+observeEvent(input$run_km, {
+    output$summary_tbl = renderDT(
+      get_surv_grp_summary(select_df(), input$time, input$event, input$grp) %&gt;%
+      mutate(across(where(is.numeric), round, 4)), 
+      options = list(scrollX = TRUE)
+    )
+})
+
+#
+output$time_ui = renderUI({
+                   req(select_df())
+                   
+                   #col_names1 &lt;- select_df() %&gt;% colnames()
+                   col_names1 &lt;- select_df() %&gt;% purrr::discard(~ !is.numeric(.)) %&gt;% names()
+                   
+                   if ("time" %in% c(col_names1)) {
+                     sel_col1 &lt;- "time"
+                   } else{
+                     sel_col1 &lt;- col_names1[1]
+                   }
+                   
+                   selectizeInput(
+                     "time",
+                     "x-axis",
+                     col_names1,
+                     selected = sel_col1,
+                     multiple = FALSE,
+                     size = "sm"
+                   )
+                   
+                 })
+                 
+                 # variable 2
+                 output$event_ui = renderUI({
+                   req(input$time)
+                   
+                   #col_names2 &lt;- select_df() %&gt;%
+                   #              dplyr::select(-(input$time)) %&gt;%
+                   #              colnames()
+
+                   col_names1 &lt;- select_df() %&gt;% purrr::discard(~ !is.numeric(.)) %&gt;% names() 
+                   col_names2 &lt;- col_names1[ !col_names1 == input$time]              
+                   
+                   if ("event" %in% c(col_names2)) {
+                     sel_col2 &lt;- "event"
+                   } else if ("status" %in% c(col_names2)) {
+                     sel_col2 &lt;- "status"
+                   } else{
+                     sel_col2 &lt;- col_names2[1]
+                   }
+                   
+                   selectizeInput(
+                     "event",
+                     "y-axis",
+                     col_names2,
+                     selected = sel_col2,
+                     multiple = FALSE,
+                     size = "sm"
+                   )
+                   
+                 })
+                 
+                 # variable 3
+                 output$grp_ui = renderUI({
+                   req(input$time)
+                   req(input$event)
+                   
+                   #col_names3 &lt;- select_df() %&gt;%
+                   #  dplyr::select(-(input$time),-(input$event)) %&gt;%
+                   #  colnames()
+
+                   #non_num_cols &lt;- select_df() %&gt;% purrr::discard(~is.numeric(.)) %&gt;% names()
+                   non_num_cols &lt;- select_df() %&gt;% names()
+                   col_names3 &lt;- non_num_cols[ !non_num_cols %in% c(input$time, input$event)]
+                   #col_names3 &lt;- non_num_cols
+
+                   #?
+                   if ("sex" %in% c(col_names3)) {
+                     sel_col3 &lt;- "sex"
+                   } else{
+                     sel_col3 &lt;- col_names3[1]
+                   }
+                   
+                   selectizeInput(
+                     "grp",
+                     "group",
+                     c(1, col_names3),
+                     selected = 1,
+                     multiple = FALSE,
+                     size = "sm"
+                   )
+                   
+                 })
+                 
+                 #!
+                 observeEvent(input$run_km, {
+                   output$plot &lt;- renderEcharts4r({
+                     req(input$time)
+                     req(input$event)
+                     req(input$grp)
+                     req(select_df())
+
+                     #? advanced plot
+                     sfit_grp_df1 &lt;-
+                       get_surv_grp_summary(select_df(), input$time, input$event, input$grp)
+                     
+                     plot_echart_timeline_km(
+                       sfit_grp_df1,
+                       tit = "Kaplan-Meier Plot",
+                       sub_tit = "Lung Data",
+                       time_line = TRUE
+                     )
+                     
+                   })
+                   
+                 })
+
+#? end
+}
+shinyApp(ui, server)
+</code></pre>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

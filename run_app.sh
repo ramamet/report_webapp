@@ -1,0 +1,1 @@
+quarto preview report.qmd --no-browser --no-watch-inputs
